@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="top.bultrail.markroad.mapper.PointMapper">
+    <resultMap id="BaseResultMap" type="top.bultrail.markroad.entity.Points">
+        <id column="id" jdbcType="INTEGER" property="id"/>
+        <result column="distanceInRoad" jdbcType="DOUBLE" property="distanceInRoad"/>
+        <result column="Lng" jdbcType="DOUBLE" property="lng"/>
+        <result column="Lat" jdbcType="DOUBLE" property="lat"/>
+    </resultMap>
+    <sql id="Base_Column_List">
+        id, distanceInRoad, Lng, Lat
+    </sql>
+    <select id="selectGatewayById" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from gateWay
+        where id = #{id,jdbcType=INTEGER}
+    </select>
+    <select id="selectStationById" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from station
+        where id = #{id,jdbcType=INTEGER}
+    </select>
+    <select id="selectSensorById" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+        select
+        <include refid="Base_Column_List"/>
+        from sensor
+        where id = #{id,jdbcType=INTEGER}
+    </select>
+    <select id="selectAllSensors" resultType="top.bultrail.markroad.entity.Points">
+        SELECT * FROM sensor
+    </select>
+<!--    <select id="selectAllGateways" resultType="top.bultrail.markroad.entity.Points">-->
+<!--        SELECT * FROM gateway-->
+<!--    </select>-->
+    <select id="selectAllGateWays" resultType="top.bultrail.markroad.entity.Points">
+        SELECT * FROM gateWay
+    </select>
+    <select id="selectAllStations" resultType="top.bultrail.markroad.entity.Points">
+        SELECT * FROM station
+    </select>
+
+    <insert id="insertDynamic" parameterType="map">
+        INSERT INTO ${tableName}
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="record.lat != null">
+                Lat,
+            </if>
+            <if test="record.lng != null">
+                Lng,
+            </if>
+            <if test="record.distanceInRoad != null">
+                distanceInRoad,
+            </if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="record.lat != null">
+                #{record.lat,jdbcType=DOUBLE},
+            </if>
+            <if test="record.lng != null">
+                #{record.lng,jdbcType=DOUBLE},
+            </if>
+            <if test="record.distanceInRoad != null">
+                #{record.distanceInRoad,jdbcType=DOUBLE},
+            </if>
+        </trim>
+    </insert>
+    <update id="truncateSensor">
+        TRUNCATE TABLE sensor
+    </update>
+    <update id="truncateGateWays">
+        TRUNCATE TABLE gateWay
+    </update>
+    <update id="truncateStation">
+        TRUNCATE TABLE station
+    </update>
+    <update id="createTableLike">
+        CREATE TABLE ${newTableName} LIKE ${originalTableName}
+    </update>
+    <update id="copyDataToNewTable">
+        INSERT INTO ${newTableName} SELECT * FROM ${originalTableName}
+    </update>
+    <update id="dropTable">
+        DROP TABLE IF EXISTS ${tableName}
+    </update>
+    <!-- 1. 添加分批插入方法 -->
+    <update id="transferDataBatch">
+        <!-- 不需要ORDER BY，MySQL会按它认为的顺序返回 -->
+        INSERT INTO ${tableName}
+        SELECT * FROM ${tableName}_${name}
+        LIMIT #{batchSize} OFFSET #{offset}
+    </update>
+
+    <!-- 2. 添加获取总记录数的方法 -->
+    <select id="getTableCount" resultType="int">
+    SELECT COUNT(*) FROM ${tableName}_${name}
+</select>
+    <!-- 3. 原来的方法保留，但可以不用或少用 -->
+    <update id="transferData">
+        INSERT INTO ${tableName} SELECT * FROM ${tableName}_${name}
+    </update>
+
+    <update id="renameTable">
+        ALTER TABLE ${oldTableName} RENAME TO ${newTableName}
+    </update>
+
+</mapper>

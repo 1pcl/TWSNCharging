@@ -1,0 +1,1 @@
+1、注意需要运行本地的路径规划服务器：java -Xmx4g -Xms2g -jar graphhopper-3.2.jar server config.yml
