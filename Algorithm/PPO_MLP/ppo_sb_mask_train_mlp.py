@@ -31,27 +31,6 @@ from sb3_contrib import MaskablePPO
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class ConvergenceAnalyzer:
-    """基于变异系数 (Coefficient of Variation) 的收敛判定器"""
-    def __init__(self, window_size: int, threshold: float):
-        self.window_size = window_size
-        self.threshold = threshold
-        self.reward_history = deque(maxlen=window_size)
-
-    def update(self, reward: float):
-        self.reward_history.append(reward)
-
-    def is_converged(self) -> tuple:
-        if len(self.reward_history) < self.window_size:
-            return False, 1.0
-        
-        rewards = np.array(self.reward_history)
-        mean_r = np.mean(rewards)
-        std_r = np.std(rewards)
-        
-        cv = std_r / (np.abs(mean_r) + 1e-8)
-        return cv < self.threshold, cv
-
 def make_env(seed, json_data,is_train):
     def _init():
         wsn_sim = WSNSimulation(json_data, seed=seed)
@@ -116,10 +95,7 @@ def run_training(args):
     with open(base_json_path, "r") as f:
         json_data = json.load(f) 
 
-    # 初始化收敛判定器
-    analyzer = ConvergenceAnalyzer(window_size=args.patience, threshold=args.cv_threshold)
-
-    headers = ['Eval#', 'TotalStep', 'avg_reward', 'avg_steps', 'avg_charged_nodes', 'avg_eue', 'avg_path_length','CV', 'Is_Converged']
+    headers = ['Eval#', 'TotalStep', 'avg_reward', 'avg_steps', 'avg_charged_nodes', 'avg_eue', 'avg_path_length']
     with open(csv_log_path, 'w', newline='') as f:
         cvs_writer = csv.writer(f)
         cvs_writer.writerow(headers)
@@ -135,17 +111,6 @@ def run_training(args):
     # 创建环境
     vec_env = DummyVecEnv([make_env(0, json_data,is_train=True) for i in range(args.num_envs)])
 
-    # 动态生成网络架构
-    # hidden_layers = [args.hidden_size] * args.n_layers
-
-    # def cosine_schedule(progress_remaining: float) -> float:
-    #     """余弦退火调度，更平滑的衰减"""
-    #     # 余弦函数从1到0.5的衰减（避免降到0）
-    #     cosine_decay = 0.5 * (1 + math.cos(math.pi * (1 - progress_remaining)))
-    #     # 确保学习率在指定范围内
-    #     min_lr = args.min_learning_rate
-    #     max_lr = args.learning_rate
-    #     return min_lr + (max_lr - min_lr) * cosine_decay
     
     # 创建模型
     model = MaskablePPO(
@@ -178,11 +143,9 @@ def run_training(args):
     print(f"  并行环境数: {args.num_envs}")
     print(f"  每周期步数: {steps_per_cycle:,} (n_steps={args.n_steps} × num_envs={args.num_envs})")
     print(f"  评估间隔: {args.eval_interval}个周期 ({steps_per_cycle * args.eval_interval:,}步)")
-    # print(f"  网络架构: {args.n_layers}层 × {args.hidden_size}神经元")
-    print(f"  最小训练步数: {args.min_timesteps:,}")
     print("="*125)
     
-    header_str = f"{'Eval#':<8} | {'TotalStep':<10} | {'Reward':<10} | {'Steps':<8} | {'Charged':<8} | {'EUE':<8} | {'Path':<10} | {'Status':<12}"
+    header_str = f"{'Eval#':<8} | {'TotalStep':<10} | {'Reward':<10} | {'Steps':<8} | {'Charged':<8} | {'EUE':<8} | {'Path':<10} "
     print(header_str)
     print("-" * 125)
 
@@ -205,24 +168,18 @@ def run_training(args):
             # 运行评估
             m = run_detailed_evaluation(model, json_data, n_episodes=10)
 
-            # 更新收敛判定
-            analyzer.update(m['reward'])
-            converged, current_cv = analyzer.is_converged()
-
             model.logger.record("eval/avg_reward", m['reward'])
             model.logger.record("eval/avg_steps", m['steps'])
             model.logger.record("eval/avg_eue", m['eue'])
             model.logger.record("eval/avg_path_length", m['path'])
             model.logger.record("eval/avg_charged_nodes", m['charged'])
-            model.logger.record("eval/cv", current_cv)
 
             model.logger.dump(step=current_steps)
 
             # 打印评估结果
-            status = "Warmup" if current_steps < args.warmup_steps else "Monitoring"
             print(f"{eval_count:<8} | {current_steps:<10} | {m['reward']:<10.2f} | "
                   f"{m['steps']:<8.1f} | {m['charged']:<8.1f} | {m['eue']:<8.4f} | "
-                  f"{m['path']:<10.2f} | {status:<12}")
+                  f"{m['path']:<10.2f}")
 
             # 记录到CSV
             with open(csv_log_path, 'a', newline='') as f:
@@ -231,25 +188,13 @@ def run_training(args):
                     eval_count, current_steps, round(m['reward'], 2), 
                     round(m['steps'], 1), round(m['charged'], 1), 
                     round(m['eue'], 4), round(m['path'], 2),
-                    round(current_cv, 6), int(converged)
                 ])
             
             # 保存最佳模型
-            if m['reward'] > best_reward + 0.1:
+            if m['reward'] > best_reward+0.1:
                 best_reward = m['reward']
                 model.save(os.path.join(model_dir, f"{args.model_name}_best_model"))
                 print(f"  [新最佳模型] 奖励: {best_reward:.2f}")
-
-            # 收敛判定早停（确保最小训练步数）
-            if (current_steps >= args.warmup_steps and 
-                current_steps >= args.min_timesteps and 
-                converged):
-                if m['reward'] > best_reward * 0.95:
-                    print(f"\n[Early Stopping] 触发收敛判定:")
-                    print(f"  最近 {args.patience} 次评估变异系数: {current_cv:.5f} < {args.cv_threshold}")
-                    print(f"  当前奖励: {m['reward']:.2f}, 最佳奖励: {best_reward:.2f}")
-                    print(f"  总训练步数: {current_steps:,}")
-                    break
 
     vec_env.close()
     print(f"\n训练完成! 最终步数: {current_steps:,}, 最佳奖励: {best_reward:.2f}")
@@ -268,7 +213,7 @@ def main():
         help="每多少个训练周期评估一次")
     
     # PPO核心参数
-    parser.add_argument("--learning_rate", type=float, default=1e-5)
+    parser.add_argument("--learning_rate", type=float, default=1e-6)
     # parser.add_argument("--min_learning_rate", type=float, default=1e-6)
     parser.add_argument("--n_steps", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=512) 
@@ -277,20 +222,6 @@ def main():
     parser.add_argument("--clip_range", type=float, default=0.15)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--gae_lambda", type=float, default=0.96)
-    
-    # 训练控制参数
-    parser.add_argument("--warmup_steps", type=int, default=150_000, 
-        help="热身步数")
-    parser.add_argument("--min_timesteps", type=int, default=1_500_000,
-        help="最小训练步数")
-    parser.add_argument("--patience", type=int, default=25, 
-        help="收敛判定窗口大小")
-    parser.add_argument("--cv_threshold", type=float, default=0.015, 
-        help="变异系数阈值 (0.01 = 1% 波动)")
-    
-    # 网络架构参数
-    # parser.add_argument("--hidden_size", type=int, default=256)
-    # parser.add_argument("--n_layers", type=int, default=3)
     
     args = parser.parse_args()
 
