@@ -31,7 +31,7 @@ python train_limit.py or python train_limit_2.py
 # Environment Configuration
 Operating System: Ubuntu 20.04+ / macOS Monterey+ / Windows 11 (WSL2 recommended)
 
-Python Version: 3.8 or 3.9 (Strict usage of 3.8/3.9 is advised as some older RL libraries may have compatibility issues with newer Python versions)
+Python Version: 3.10
 
 
 # Directory Structure Description
