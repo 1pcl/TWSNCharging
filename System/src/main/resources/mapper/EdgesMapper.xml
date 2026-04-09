@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="top.bultrail.markroad.mapper.EdgesMapper">
+
+    <resultMap id="BaseResultMap" type="top.bultrail.markroad.entity.Edges">
+        <id column="id" jdbcType="VARCHAR" property="id"/>
+        <result column="from_node" jdbcType="VARCHAR" property="from_node"/>
+        <result column="to_node" jdbcType="VARCHAR" property="to_node"/>
+        <result column="length_m" jdbcType="DOUBLE" property="length_m"/>
+    </resultMap>
+
+    <!-- 批量插入边 - 修改属性名 -->
+    <insert id="batchInsertEdges" parameterType="java.util.List">
+        INSERT INTO edges (id, from_node, to_node, length_m)
+        VALUES
+        <foreach collection="list" item="item" index="index" separator=",">
+            (#{item.id,jdbcType=VARCHAR},
+            #{item.from_node,jdbcType=VARCHAR},
+            #{item.to_node,jdbcType=VARCHAR},
+            #{item.length_m,jdbcType=DOUBLE})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+        length_m = VALUES(length_m)
+    </insert>
+
+    <!-- 插入单条边 - 修改属性名 -->
+    <insert id="insertEdge" parameterType="top.bultrail.markroad.entity.Edges">
+        INSERT INTO edges (id, from_node, to_node, length_m)
+        VALUES (#{id,jdbcType=VARCHAR},
+                #{from_node,jdbcType=VARCHAR},
+                #{to_node,jdbcType=VARCHAR},
+                #{length_m,jdbcType=DOUBLE})
+        ON DUPLICATE KEY UPDATE
+        length_m = VALUES(length_m)
+    </insert>
+
+    <!-- 清空所有边 -->
+    <update id="truncateEdges">
+        TRUNCATE TABLE edges
+    </update>
+
+    <!-- 查询所有边 -->
+    <select id="selectAllEdges" resultMap="BaseResultMap">
+        SELECT id, from_node, to_node, length_m
+        FROM edges
+        ORDER BY id
+    </select>
+
+    <!-- 根据边ID查询 -->
+    <select id="selectEdgeById" resultMap="BaseResultMap">
+        SELECT id, from_node, to_node, length_m
+        FROM edges
+        WHERE id = #{edgeId,jdbcType=VARCHAR}
+    </select>
+
+    <!-- 根据起终点节点查询边 -->
+    <select id="selectEdgeByNodes" resultMap="BaseResultMap">
+        SELECT id, from_node, to_node, length_m
+        FROM edges
+        WHERE (from_node = #{node1,jdbcType=VARCHAR} AND to_node = #{node2,jdbcType=VARCHAR})
+           OR (from_node = #{node2,jdbcType=VARCHAR} AND to_node = #{node1,jdbcType=VARCHAR})
+    </select>
+
+    <!-- 查询某个节点的所有邻居（无向图） -->
+    <select id="selectNeighborsByNode" resultMap="BaseResultMap">
+        SELECT id, from_node, to_node, length_m
+        FROM edges
+        WHERE from_node = #{nodeId,jdbcType=VARCHAR}
+           OR to_node = #{nodeId,jdbcType=VARCHAR}
+    </select>
+
+    <!-- 根据节点删除相关边 -->
+    <delete id="deleteEdgesByNode">
+        DELETE FROM edges
+        WHERE from_node = #{nodeId,jdbcType=VARCHAR}
+           OR to_node = #{nodeId,jdbcType=VARCHAR}
+    </delete>
+
+    <!-- 根据边ID删除 -->
+    <delete id="deleteEdgeById">
+        DELETE FROM edges
+        WHERE id = #{edgeId,jdbcType=VARCHAR}
+    </delete>
+
+    <!-- 统计边数量 -->
+    <select id="countEdges" resultType="int">
+        SELECT COUNT(*) FROM edges
+    </select>
+
+    <!-- 统计总道路长度（米） -->
+    <select id="sumTotalLength" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(length_m), 0) FROM edges
+    </select>
+</mapper>
