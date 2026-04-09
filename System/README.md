@@ -31,7 +31,7 @@ This project supports calling python algorithm for calculation, but needs to con
 # Environment Configuration
 ## Runtime environment
 * JRE 1.8
-* python 3.8+
+* python 3.10
 
 
 ## Development environment
