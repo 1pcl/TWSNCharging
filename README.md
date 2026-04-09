@@ -18,5 +18,5 @@ Additionally, a practical software system for the scheduling of mobile wireless 
 ## Directory Structure Description
 ```sh
 |-- README.md     // help
-|-- algorithm  // Core RAWCS algorithm
-|-- system  // Complete system code
+|-- Algorithm  // Core RAWCS algorithm
+|-- System  // Complete system code
