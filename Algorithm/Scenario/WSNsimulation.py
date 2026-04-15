@@ -60,7 +60,7 @@ class WSNSimulation:
         self._build_full_graph()
         self._select_charging_nodes()
         self._build_direct_connection_graph()
-        # self._calculate_max_min()
+        self._calculate_max_min()
     
     def _load_data(self, data_input: Union[str, Dict[str, Any]]) -> None:
         """从文件路径或数据字典加载数据"""
@@ -346,20 +346,20 @@ class WSNSimulation:
         
         return distances, paths
     
-    # def _calculate_max_min(self):
-    #     """计算压缩后的图的最大最小值"""
-    #     # 更新坐标范围（基于保留的节点）
-    #     for node in self.point_info:
-    #         x = node['x']
-    #         y = node['y']
-    #         if x > self.max_min["x"]["max"]:
-    #             self.max_min["x"]["max"] = x
-    #         if x < self.max_min["x"]["min"]:
-    #             self.max_min["x"]["min"] = x
-    #         if y > self.max_min["y"]["max"]:
-    #             self.max_min["y"]["max"] = y
-    #         if y < self.max_min["y"]["min"]:
-    #             self.max_min["y"]["min"] = y
+    def _calculate_max_min(self):
+        """计算压缩后的图的最大最小值"""
+        # 更新坐标范围（基于保留的节点）
+        for node in self.point_info:
+            x = node['x']
+            y = node['y']
+            if x > self.max_min["x"]["max"]:
+                self.max_min["x"]["max"] = x
+            if x < self.max_min["x"]["min"]:
+                self.max_min["x"]["min"] = x
+            if y > self.max_min["y"]["max"]:
+                self.max_min["y"]["max"] = y
+            if y < self.max_min["y"]["min"]:
+                self.max_min["y"]["min"] = y
     
     def get_data(self) -> Dict[str, Any]:
         """返回图数据和节点信息"""
