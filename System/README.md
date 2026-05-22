@@ -9,10 +9,6 @@
 - [Directory Structure Description](#directory-structure-description)
 - [Contributors](#contributors)
 
-# Demo
-
-<!-- Add a demo for your project -->
-
 This system is an experimental platform for charging scheduling in Traffic Wireless Sensor Networks (TWSNs).
 The charging scheduling process consists of two key steps: collection of roadside sensor node coordinates and calculation of optimal charging scheduling plans.
 The system provides four test datasets for evaluation. You may also use the mark mode to manually label node coordinates.
