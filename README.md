@@ -1,4 +1,4 @@
-# Relay Node Deployment System for Traffic Wireless Sensor Networks
+# RAWCS: Road-Aware Wireless Charging Scheduling for Traffic Wireless Sensor Networks
 <!-- Add banner here -->
 ![Banner](./images/RN335RAWCS.png)
 
