@@ -67,7 +67,7 @@
 
 <!-- Add a demo for your project -->
 
-This system is an experimental platform for relay node deployment of traffic wireless sensor networks . It can be used to evaluate the implementation effect of the relay node deployment algorithm in actual traffic scenarios. Relay node deployment of traffic wireless sensor networks consists of two key steps: roadside sensor node coordinate collection and relay node optimal deployment location calculation. This system provides 4 test datasets that can be used for testing. You can also use the mark mode in the system to mark node coordinates for relay node calculations.
+This system serves as an experimental platform for the proposed RAWCS (Road-Aware Wireless Charging Scheduling) algorithm for traffic wireless sensor networks (TWSNs). It can be used to evaluate the performance of the mobile wireless charging scheduling algorithm under realistic road-constrained traffic scenarios. The proposed method consists of three key steps: first, constructing a road-constrained graph to model the spatial relationships among the urban road network, TWSN nodes, and the service station; second, constructing a task-oriented graph abstraction to support charging scheduling while preserving shortest-path travel distances between charging-related nodes; and third, designing an attention-based deep reinforcement learning (RL) scheduler over the abstracted graph to jointly optimize mobile charger routing and adaptive charging time allocation. The system provides four test datasets that can be used for testing. Users can also use the mark mode in the system to mark node coordinates for charging task generation.
 
 
 ![Banner](./images/RN335.gif)
