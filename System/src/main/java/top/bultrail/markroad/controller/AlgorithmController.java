@@ -63,14 +63,24 @@ public class AlgorithmController {
         return ResponseEntity.ok(ResultEntity.sucessWithData(combineResults(simulationData, algorithmResult)));
     }
 
-    // ==================== ACO算法 API ====================
-    @RequestMapping(value = {"/runACOAlgorithm", "/api/runACOAlgorithm"})
+    // ==================== ADRL算法 API ====================
+    @RequestMapping(value = {"/runADRLAlgorithm", "/api/runADRLAlgorithm"})
     @ResponseBody
-    public ResponseEntity<ResultEntity<Map<String, Object>>> runACOAlgorithm(HttpSession session) {
+    public ResponseEntity<ResultEntity<Map<String, Object>>> runADRLAlgorithm(HttpSession session) {
         Map<String, Object> simulationData = getOrCreateWSNData(session);
-        Map<String, Object> algorithmResult = algorithmExecutionService.runACOAlgorithm(simulationData);
+        Map<String, Object> algorithmResult = algorithmExecutionService.runADRLAlgorithm(simulationData);
         return ResponseEntity.ok(ResultEntity.sucessWithData(combineResults(simulationData, algorithmResult)));
     }
+
+
+//    // ==================== ACO算法 API ====================
+//    @RequestMapping(value = {"/runACOAlgorithm", "/api/runACOAlgorithm"})
+//    @ResponseBody
+//    public ResponseEntity<ResultEntity<Map<String, Object>>> runACOAlgorithm(HttpSession session) {
+//        Map<String, Object> simulationData = getOrCreateWSNData(session);
+//        Map<String, Object> algorithmResult = algorithmExecutionService.runACOAlgorithm(simulationData);
+//        return ResponseEntity.ok(ResultEntity.sucessWithData(combineResults(simulationData, algorithmResult)));
+//    }
 
     // ==================== NSGA算法 API ====================
 
