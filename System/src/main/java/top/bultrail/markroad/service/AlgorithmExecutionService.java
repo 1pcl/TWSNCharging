@@ -27,9 +27,12 @@ public class AlgorithmExecutionService {
     private String RAWCSApiUrl;
 
 
-    // ACO算法
-    @Value("${python.aco.url}")
-    private String acoApiUrl;
+//    // ACO算法
+//    @Value("${python.aco.url}")
+//    private String acoApiUrl;
+
+    @Value("${python.adrl.url}")
+    private String adrlApiUrl;
 
     // NPSO算法
     @Value("${python.nsga.url}")
@@ -125,18 +128,25 @@ public class AlgorithmExecutionService {
         return executeAlgorithm(RAWCSApiUrl, simulationData);
     }
 
-
-    // ==================== ACO算法 ====================
-    public Map<String, Object> runACOAlgorithm(Map<String, Object> simulationData) {
+    public Map<String, Object> runADRLAlgorithm(Map<String, Object> simulationData) {
         String datasetName = getDatasetName();
         simulationData.put("dataset_name", datasetName);
-
-        // 添加完整的道路网络数据（与贪心算法一致）
         Map<String, Object> roadGraphData = wsnSimulationService.getRoadGraphData();
         simulationData.put("road_graph_data", roadGraphData);
-
-        return executeAlgorithm(acoApiUrl, simulationData);
+        return executeAlgorithm(adrlApiUrl, simulationData);
     }
+
+//    // ==================== ACO算法 ====================
+//    public Map<String, Object> runACOAlgorithm(Map<String, Object> simulationData) {
+//        String datasetName = getDatasetName();
+//        simulationData.put("dataset_name", datasetName);
+//
+//        // 添加完整的道路网络数据（与贪心算法一致）
+//        Map<String, Object> roadGraphData = wsnSimulationService.getRoadGraphData();
+//        simulationData.put("road_graph_data", roadGraphData);
+//
+//        return executeAlgorithm(acoApiUrl, simulationData);
+//    }
 
 
     // ==================== NPSO算法 ====================
