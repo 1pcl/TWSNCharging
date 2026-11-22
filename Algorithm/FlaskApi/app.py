@@ -37,15 +37,15 @@ except ImportError as e:
     GreedyPathPlanner = None
     GreedyUAVSimulator = None
 
-# 导入ACO算法模块
-try:
-    from other.aco_unlimited import ImprovedAntColonyOptimizer, ACOSimulator
-    logging.info("ACO算法模块导入成功")
-except ImportError as e:
-    logging.error(f"ACO算法模块导入失败: {e}")
-    ACORoadNetwork = None
-    ImprovedAntColonyOptimizer = None
-    ACOSimulator = None
+# # 导入ACO算法模块
+# try:
+#     from other.aco_unlimited import ImprovedAntColonyOptimizer, ACOSimulator
+#     logging.info("ACO算法模块导入成功")
+# except ImportError as e:
+#     logging.error(f"ACO算法模块导入失败: {e}")
+#     ACORoadNetwork = None
+#     ImprovedAntColonyOptimizer = None
+#     ACOSimulator = None
 
 # 导入NSGA算法模块
 try:
@@ -294,7 +294,8 @@ def convert_point_info_to_algorithm_format(point_info_list):
             ref_lat_rad = math.radians(ref_lat)
             x = EARTH_RADIUS * math.cos(ref_lat_rad) * math.radians(lng - ref_lon)
             y = EARTH_RADIUS * math.radians(lat - ref_lat)
-        
+
+        raw_battery = point.get("battery_info", {})
         converted_point = {
             "node_id": point.get("node_id"),
             "type": node_type,
@@ -303,11 +304,11 @@ def convert_point_info_to_algorithm_format(point_info_list):
             "degree": point.get("degree", 0),
             "neighbors": point.get("neighbors", []),
             "battery_info": {
-                "current_energy": point.get("current_energy", 0),
-                "current_energy_ratio": point.get("current_energy_ratio", 1.0),
-                "charging_rate": point.get("charging_rate", 0.98),
-                "needs_charge": point.get("needs_charge", False),
-                "total_battery": point.get("total_battery", 0)
+                "current_energy": raw_battery.get("current_energy", 0),
+                "current_energy_ratio": raw_battery.get("current_energy_ratio", 1.0),
+                "charging_rate": raw_battery.get("charging_rate", 0.98),
+                "needs_charge": raw_battery.get("needs_charge", False),
+                "total_battery": raw_battery.get("total_battery", 0)
             }
         }
         converted.append(converted_point)
@@ -343,8 +344,8 @@ def run_wsn_api():
     try:
         data = request.get_json()
         
-        sensor_battery = data.get('sensor_battery', 240000.0)
-        relay_battery = data.get('relay_battery', 800000.0)
+        sensor_battery = data.get('sensor_battery', 10000.0)
+        relay_battery = data.get('relay_battery', 40000.0)
         station_battery = data.get('station_battery', 1000000.0)
         num_sensors = data.get('num_sensors', 40)
         num_relays = data.get('num_relays', 5)
@@ -563,7 +564,7 @@ def run_greedy():
             if not is_station and node_info:
                 current_energy = node_info['battery_info'].get('current_energy', 0)
                 charging_rate = node_info['battery_info'].get('charging_rate', 0.85)
-                max_battery = 240000.0 if node_type == 'sensor' else 800000.0
+                max_battery = 10000.0 if node_type == 'sensor' else 40000.0
                 energy_needed = max_battery - current_energy
                 effective_power = 100.0 * charging_rate
                 charge_time = energy_needed / effective_power if effective_power > 0 else 0
@@ -679,154 +680,154 @@ def _build_road_graph_from_point_info(point_info: List[Dict], graph_G: Dict) -> 
     }
 
 
-# ==================== ACO算法API ====================
-@app.route('/api/runACO', methods=['POST'])
-def run_aco():
-    """运行改进蚁群算法"""
-    global current_wsn_data
+# # ==================== ACO算法API ====================
+# @app.route('/api/runACO', methods=['POST'])
+# def run_aco():
+#     """运行改进蚁群算法"""
+#     global current_wsn_data
     
-    try:
-        data = request.get_json()
-        if not data:
-            data = current_wsn_data if current_wsn_data else {}
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             data = current_wsn_data if current_wsn_data else {}
         
-        raw_point_info = data.get('point_info', [])
-        graph_G = data.get('graph_G', {})
-        max_min = data.get('max_min', {})
+#         raw_point_info = data.get('point_info', [])
+#         graph_G = data.get('graph_G', {})
+#         max_min = data.get('max_min', {})
         
-        # 获取道路网络数据
-        road_graph_data = data.get('road_graph_data', {})
+#         # 获取道路网络数据
+#         road_graph_data = data.get('road_graph_data', {})
         
-        if not road_graph_data.get('nodes') or not road_graph_data.get('edges'):
-            return jsonify({
-                "status": "error", 
-                "message": "缺少道路网络数据"
-            }), 400
+#         if not road_graph_data.get('nodes') or not road_graph_data.get('edges'):
+#             return jsonify({
+#                 "status": "error", 
+#                 "message": "缺少道路网络数据"
+#             }), 400
         
-        if ImprovedAntColonyOptimizer is None or ACOSimulator is None:
-            return jsonify({"status": "error", "message": "ACO算法模块不可用"}), 500
+#         if ImprovedAntColonyOptimizer is None or ACOSimulator is None:
+#             return jsonify({"status": "error", "message": "ACO算法模块不可用"}), 500
         
-        logger.info("开始执行改进蚁群算法...")
+#         logger.info("开始执行改进蚁群算法...")
         
-        # 转换 point_info 格式
-        point_info = convert_point_info_to_algorithm_format(raw_point_info)
+#         # 转换 point_info 格式
+#         point_info = convert_point_info_to_algorithm_format(raw_point_info)
         
-        # 动态构建道路网络
-        network = DynamicRoadNetwork(road_graph_data)
+#         # 动态构建道路网络
+#         network = DynamicRoadNetwork(road_graph_data)
         
         
-        # 获取ACO参数
-        aco_params = data.get('aco_params', {})
+#         # 获取ACO参数
+#         aco_params = data.get('aco_params', {})
         
-        # 创建 ACO 优化器
-        optimizer = ImprovedAntColonyOptimizer(
-            network=network,  # 传入 DynamicRoadNetwork
-            charging_node_info=point_info,
-            num_ants=aco_params.get('num_ants', 60),
-            max_iterations=aco_params.get('max_iterations', 400),
-            alpha0=aco_params.get('alpha0', 0.7),
-            alpha1=aco_params.get('alpha1', 1.8),
-            K=aco_params.get('K', 0.008),
-            beta=aco_params.get('beta', 1.5),
-            gamma=aco_params.get('gamma', 0.5),
-            rho=aco_params.get('rho', 0.02),
-            Q=aco_params.get('Q', 200.0),
-            tau_min=aco_params.get('tau_min', 0.0005),
-            tau_max=aco_params.get('tau_max', 15.0),
-            distance_threshold=aco_params.get('distance_threshold', 6000.0),
-            elite_ant_ratio=aco_params.get('elite_ant_ratio', 0.25),
-            exploration_rate=aco_params.get('exploration_rate', 0.2),
-            stagnation_limit=aco_params.get('stagnation_limit', 100)
-        )
+#         # 创建 ACO 优化器
+#         optimizer = ImprovedAntColonyOptimizer(
+#             network=network,  # 传入 DynamicRoadNetwork
+#             charging_node_info=point_info,
+#             num_ants=aco_params.get('num_ants', 60),
+#             max_iterations=aco_params.get('max_iterations', 400),
+#             alpha0=aco_params.get('alpha0', 0.7),
+#             alpha1=aco_params.get('alpha1', 1.8),
+#             K=aco_params.get('K', 0.008),
+#             beta=aco_params.get('beta', 1.5),
+#             gamma=aco_params.get('gamma', 0.5),
+#             rho=aco_params.get('rho', 0.02),
+#             Q=aco_params.get('Q', 200.0),
+#             tau_min=aco_params.get('tau_min', 0.0005),
+#             tau_max=aco_params.get('tau_max', 15.0),
+#             distance_threshold=aco_params.get('distance_threshold', 6000.0),
+#             elite_ant_ratio=aco_params.get('elite_ant_ratio', 0.25),
+#             exploration_rate=aco_params.get('exploration_rate', 0.2),
+#             stagnation_limit=aco_params.get('stagnation_limit', 100)
+#         )
         
-        # 执行优化
-        plan = optimizer.optimize(verbose=True)
+#         # 执行优化
+#         plan = optimizer.optimize(verbose=True)
         
-        # 准备仿真数据
-        wsn_data = {'graph_G': graph_G, 'point_info': point_info, 'max_min': max_min}
-        simulator = ACOSimulator(wsn_data)
-        results = simulator.run_sequence(plan['complete_sequence'], plan['charging_sequence'])
+#         # 准备仿真数据
+#         wsn_data = {'graph_G': graph_G, 'point_info': point_info, 'max_min': max_min}
+#         simulator = ACOSimulator(wsn_data)
+#         results = simulator.run_sequence(plan['complete_sequence'], plan['charging_sequence'])
         
-        # 获取路径坐标（使用新增的方法）
-        path_coords_list = optimizer.get_full_path_coords()
+#         # 获取路径坐标（使用新增的方法）
+#         path_coords_list = optimizer.get_full_path_coords()
         
-        # 构建 action_log
-        action_log = []
-        complete_sequence = plan['complete_sequence']
-        station_id = plan['station_id']
+#         # 构建 action_log
+#         action_log = []
+#         complete_sequence = plan['complete_sequence']
+#         station_id = plan['station_id']
         
-        for i in range(1, len(complete_sequence)):
-            target_id = complete_sequence[i]
-            is_station = (target_id == station_id)
+#         for i in range(1, len(complete_sequence)):
+#             target_id = complete_sequence[i]
+#             is_station = (target_id == station_id)
             
-            # 获取路径坐标
-            path_coords = path_coords_list[i-1] if i-1 < len(path_coords_list) else []
+#             # 获取路径坐标
+#             path_coords = path_coords_list[i-1] if i-1 < len(path_coords_list) else []
             
-            # 计算移动时间（使用图中实际距离）
-            # 从 dist_matrix 获取距离
-            from_idx = optimizer.node_to_idx.get(complete_sequence[i-1])
-            to_idx = optimizer.node_to_idx.get(target_id)
-            if from_idx is not None and to_idx is not None:
-                step_distance = optimizer.dist_matrix[from_idx, to_idx]
-            else:
-                step_distance = 0
-            step_time = step_distance / 5.0
+#             # 计算移动时间（使用图中实际距离）
+#             # 从 dist_matrix 获取距离
+#             from_idx = optimizer.node_to_idx.get(complete_sequence[i-1])
+#             to_idx = optimizer.node_to_idx.get(target_id)
+#             if from_idx is not None and to_idx is not None:
+#                 step_distance = optimizer.dist_matrix[from_idx, to_idx]
+#             else:
+#                 step_distance = 0
+#             step_time = step_distance / 5.0
             
-            # 获取节点信息
-            node_info = next((p for p in point_info if p.get('node_id') == target_id), None)
-            node_type = node_info.get('type', 'unknown') if node_info else 'unknown'
+#             # 获取节点信息
+#             node_info = next((p for p in point_info if p.get('node_id') == target_id), None)
+#             node_type = node_info.get('type', 'unknown') if node_info else 'unknown'
             
-            # 计算充电时间
-            charge_time = 0
-            if not is_station and node_info:
-                current_energy = node_info['battery_info'].get('current_energy', 0)
-                charging_rate = node_info['battery_info'].get('charging_rate', 0.85)
-                max_battery = 240000.0 if node_type == 'sensor' else 800000.0
-                energy_needed = max_battery - current_energy
-                effective_power = 100.0 * charging_rate
-                charge_time = energy_needed / effective_power if effective_power > 0 else 0
+#             # 计算充电时间
+#             charge_time = 0
+#             if not is_station and node_info:
+#                 current_energy = node_info['battery_info'].get('current_energy', 0)
+#                 charging_rate = node_info['battery_info'].get('charging_rate', 0.85)
+#                 max_battery = 240000.0 if node_type == 'sensor' else 800000.0
+#                 energy_needed = max_battery - current_energy
+#                 effective_power = 100.0 * charging_rate
+#                 charge_time = energy_needed / effective_power if effective_power > 0 else 0
             
-            action_log.append({
-                "step": i,
-                "uav_to": target_id,
-                "destination_type": "station" if is_station else node_type,
-                "path_nodes": path_coords,
-                "move_time": step_time,
-                "charge_time": charge_time
-            })
+#             action_log.append({
+#                 "step": i,
+#                 "uav_to": target_id,
+#                 "destination_type": "station" if is_station else node_type,
+#                 "path_nodes": path_coords,
+#                 "move_time": step_time,
+#                 "charge_time": charge_time
+#             })
         
-        response_data = {
-            "point_info": raw_point_info,
-            "action_log": action_log,
-            "metrics": {
-                'total_reward': float(results['total_reward']),
-                "total_distance_m": float(results['total_distance']),
-                "total_distance_km": float(results['total_distance'] / 1000),
-                "total_steps": int(results['total_steps']),
-                "charged_count": int(results['charged_count']),
-                "total_nodes": int(results['total_nodes']),
-                "num_trips": int(results['num_trips']),
-                "eue": float(results['eue']),
-                "charge_energy_j": float(results['charge_energy']),
-                "move_energy_j": float(results['move_energy']),
-                "tx_energy_j": float(results['tx_energy']),
-                "optimization_time": float(plan['optimization_time']),
-                "iterations": int(plan['iterations']),
-                "best_energy_metric": float(plan.get('best_energy_metric', 0))
-            },
-            "aco_sequence": plan['charging_sequence'],
-            "total_planned_distance": float(plan['total_distance'])
-        }
+#         response_data = {
+#             "point_info": raw_point_info,
+#             "action_log": action_log,
+#             "metrics": {
+#                 'total_reward': float(results['total_reward']),
+#                 "total_distance_m": float(results['total_distance']),
+#                 "total_distance_km": float(results['total_distance'] / 1000),
+#                 "total_steps": int(results['total_steps']),
+#                 "charged_count": int(results['charged_count']),
+#                 "total_nodes": int(results['total_nodes']),
+#                 "num_trips": int(results['num_trips']),
+#                 "eue": float(results['eue']),
+#                 "charge_energy_j": float(results['charge_energy']),
+#                 "move_energy_j": float(results['move_energy']),
+#                 "tx_energy_j": float(results['tx_energy']),
+#                 "optimization_time": float(plan['optimization_time']),
+#                 "iterations": int(plan['iterations']),
+#                 "best_energy_metric": float(plan.get('best_energy_metric', 0))
+#             },
+#             "aco_sequence": plan['charging_sequence'],
+#             "total_planned_distance": float(plan['total_distance'])
+#         }
         
-        logger.info(f"ACO算法完成: 总距离={results['total_distance']:.2f}m, 迭代次数={plan['iterations']}")
-        print(f"ACO算法完成: 总距离={results['total_distance']:.2f}m,EUE={results['eue']:.2f},reward={results['total_reward']:.2f}")
+#         logger.info(f"ACO算法完成: 总距离={results['total_distance']:.2f}m, 迭代次数={plan['iterations']}")
+#         print(f"ACO算法完成: 总距离={results['total_distance']:.2f}m,EUE={results['eue']:.2f},reward={results['total_reward']:.2f}")
         
-        return jsonify({"status": "success", "message": "ACO算法执行完成", "data": convert_numpy_types(response_data)})
+#         return jsonify({"status": "success", "message": "ACO算法执行完成", "data": convert_numpy_types(response_data)})
         
-    except Exception as e:
-        logger.error(f"ACO算法执行失败: {e}")
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
+#     except Exception as e:
+#         logger.error(f"ACO算法执行失败: {e}")
+#         traceback.print_exc()
+#         return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # ==================== NSGA算法API ====================
@@ -916,7 +917,7 @@ def run_nsga():
             if not is_station and node_info:
                 current_energy = node_info['battery_info'].get('current_energy', 0)
                 charging_rate = node_info['battery_info'].get('charging_rate', 0.85)
-                max_battery = 240000.0 if node_type == 'sensor' else 800000.0
+                max_battery = 10000.0 if node_type == 'sensor' else 40000.0
                 energy_needed = max_battery - current_energy
                 effective_power = 100.0 * charging_rate
                 charge_time = energy_needed / effective_power if effective_power > 0 else 0
@@ -1056,7 +1057,7 @@ def run_rawcs():
             if not is_station and node_info:
                 current_energy = node_info['battery_info'].get('current_energy', 0)
                 charging_rate = node_info['battery_info'].get('charging_rate', 0.85)
-                max_battery = 240000.0 if node_type == 'sensor' else 800000.0
+                max_battery = 10000.0 if node_type == 'sensor' else 40000.0
                 energy_needed = max_battery - current_energy
                 effective_power = 100.0 * charging_rate
                 charge_time = energy_needed / effective_power if effective_power > 0 else 0
