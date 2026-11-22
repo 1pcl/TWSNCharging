@@ -20,8 +20,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 try:
-    from Scenario.uav_scheduling_unlimited import UAVSchedulingUnlimitedEnv
-    # from Scenario.uav_scheduling_limited import UAVSchedulingLimitedEnv
+    # from Scenario.uav_scheduling_unlimited import UAVSchedulingUnlimitedEnv
+    from Scenario.uav_scheduling_limited import UAVSchedulingLimitedEnv
     from Scenario.WSNsimulation import WSNSimulation 
 except ImportError as e:
     print(f"导入自定义模块失败: {e}")
@@ -37,7 +37,7 @@ def make_env(seed, json_data,is_train):
     def _init():
         wsn_sim = WSNSimulation(json_data, seed=seed)
         data = wsn_sim.get_data()
-        env = UAVSchedulingUnlimitedEnv(
+        env = UAVSchedulingLimitedEnv(
             graph_G=data["graph_G"], 
             point_info=data["point_info"], 
             max_min= data['max_min'],
@@ -126,7 +126,7 @@ def run_training(args):
         clip_range=args.clip_range, 
         verbose=0, 
         device=device,
-        tensorboard_log="ppo_uav_tensorboard",            
+        tensorboard_log="./limit_tensorboard/",            
         vf_coef=args.vf_coef,
         max_grad_norm=args.max_grad_norm,
         normalize_advantage=args.normalize_advantage,
@@ -134,7 +134,7 @@ def run_training(args):
             node_count=node_count,
             time_levels=time_levels,
             node_dim=10,
-            uav_dim=6, 
+            uav_dim=8, 
             embedding_dim=128,
         ),
     )
@@ -205,8 +205,8 @@ def main():
     parser = argparse.ArgumentParser()
     
     # 基础参数
-    parser.add_argument("--model_name", type=str, default="unlimited")
-    # parser.add_argument("--model_name", type=str, default="limited")
+    # parser.add_argument("--model_name", type=str, default="unlimited")
+    parser.add_argument("--model_name", type=str, default="limited")
     parser.add_argument("--num_envs", type=int, default=8)
     parser.add_argument("--max_timesteps", type=int, default=5_000_000)
     parser.add_argument("--data_base_path", default="data/road_graph_with_nodes.json")
