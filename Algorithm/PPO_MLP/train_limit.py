@@ -20,8 +20,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 try:
-    # from Scenario.uav_scheduling_unlimited import UAVSchedulingUnlimitedEnv
-    from Scenario.uav_scheduling_limited import UAVSchedulingLimitedEnv
+    from Scenario.uav_scheduling_unlimited import UAVSchedulingUnlimitedEnv
+    # from Scenario.uav_scheduling_limited import UAVSchedulingLimitedEnv
     from Scenario.WSNsimulation import WSNSimulation 
 except ImportError as e:
     print(f"导入自定义模块失败: {e}")
@@ -37,7 +37,7 @@ def make_env(seed, json_data,is_train):
     def _init():
         wsn_sim = WSNSimulation(json_data, seed=seed)
         data = wsn_sim.get_data()
-        env = UAVSchedulingLimitedEnv(
+        env = UAVSchedulingUnlimitedEnv(
             graph_G=data["graph_G"], 
             point_info=data["point_info"], 
             max_min= data['max_min'],
@@ -58,7 +58,7 @@ def run_detailed_evaluation(model, json_data, n_episodes=20):
         done = False
         ep_reward, ep_steps = 0, 0
         path_total = 0.0
-        charge_e = move_e = tx_e = active_e = 0.0
+        charge_e = move_e = tx_e = 0.0
 
         while not done:
             action_masks = eval_env.action_masks()
@@ -71,10 +71,9 @@ def run_detailed_evaluation(model, json_data, n_episodes=20):
             charge_e += info.get('step_charge_energy', 0)
             move_e += info.get('step_move_energy', 0)
             tx_e += info.get('step_tx_energy', 0)
-            active_e += info.get('active_energy', 0)
             done = terminated or truncated
         
-        denom = move_e + tx_e + active_e
+        denom = move_e + tx_e
         eue = charge_e / denom if denom > 0 else 0.0
 
         all_metrics["reward"].append(ep_reward)
@@ -127,13 +126,15 @@ def run_training(args):
         clip_range=args.clip_range, 
         verbose=0, 
         device=device,
-        tensorboard_log=None,            
+        tensorboard_log="ppo_uav_tensorboard",            
         vf_coef=args.vf_coef,
         max_grad_norm=args.max_grad_norm,
         normalize_advantage=args.normalize_advantage,
         policy_kwargs=dict(
             node_count=node_count,
             time_levels=time_levels,
+            node_dim=10,
+            uav_dim=6, 
             embedding_dim=128,
         ),
     )
@@ -192,7 +193,7 @@ def run_training(args):
                 ])
             
             # 保存最佳模型
-            if m['reward'] > best_reward + 0.1:
+            if m['reward'] > best_reward:
                 best_reward = m['reward']
                 model.save(os.path.join(model_dir, f"{args.model_name}_best_model"))
                 print(f"  [新最佳模型] 奖励: {best_reward:.2f}")
@@ -204,22 +205,22 @@ def main():
     parser = argparse.ArgumentParser()
     
     # 基础参数
-    # parser.add_argument("--model_name", type=str, default="unlimited")
-    parser.add_argument("--model_name", type=str, default="limited")
+    parser.add_argument("--model_name", type=str, default="unlimited")
+    # parser.add_argument("--model_name", type=str, default="limited")
     parser.add_argument("--num_envs", type=int, default=8)
-    parser.add_argument("--max_timesteps", type=int, default=10_000_000)
+    parser.add_argument("--max_timesteps", type=int, default=5_000_000)
     parser.add_argument("--data_base_path", default="data/road_graph_with_nodes.json")
     
     # 评估参数
-    parser.add_argument("--eval_interval", type=int, default=5,
+    parser.add_argument("--eval_interval", type=int, default=3,
         help="每多少个训练周期评估一次")
     
-    parser.add_argument("--learning_rate", type=float, default=1e-6)
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--n_steps", type=int, default=1024)
-    parser.add_argument("--batch_size", type=int, default=512) 
+    parser.add_argument("--batch_size", type=int, default=1024) 
     parser.add_argument("--n_epochs", type=int, default=8)
-    parser.add_argument("--ent_coef", type=float, default=0.01)
-    parser.add_argument("--clip_range", type=float, default=0.15)
+    parser.add_argument("--ent_coef", type=float, default=0.03)
+    parser.add_argument("--clip_range", type=float, default=0.10)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--gae_lambda", type=float, default=0.96)
 
