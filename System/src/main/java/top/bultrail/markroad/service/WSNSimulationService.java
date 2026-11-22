@@ -315,10 +315,10 @@ public class WSNSimulationService {
                 requestData.put("seed", Math.abs(new Random().nextInt()));
             }
             if (!requestData.containsKey("sensor_battery")) {
-                requestData.put("sensor_battery", 240000.0);
+                requestData.put("sensor_battery", 10000.0);
             }
             if (!requestData.containsKey("relay_battery")) {
-                requestData.put("relay_battery", 800000.0);
+                requestData.put("relay_battery", 40000.0);
             }
             if (!requestData.containsKey("station_battery")) {
                 requestData.put("station_battery", 1000000.0);
@@ -432,6 +432,22 @@ public class WSNSimulationService {
             case "RN422":
                 result.put("sensor_count", 55);
                 result.put("relay_count", 0);
+                break;
+            case "RN373":
+                result.put("sensor_count", 40);
+                result.put("relay_count", 5);
+                break;
+            case "RN446":
+                result.put("sensor_count", 55);
+                result.put("relay_count", 6);
+                break;
+            case "RN528":
+                result.put("sensor_count", 50);
+                result.put("relay_count", 7);
+                break;
+            case "RN629":
+                result.put("sensor_count", 55);
+                result.put("relay_count", 8);
                 break;
             default:
                 // 默认值
