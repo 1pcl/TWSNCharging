@@ -3,7 +3,7 @@
 特点：
 - 电池容量适中（可配置）
 - 需要多次往返充电站给所有节点充电
-- 最大步数较大（节点数的8倍）
+- 最大步数较大（节点数的2倍）
 - 保持原始reward计算逻辑不变
 - 在充电站时，累计能量但不在中间计算最终奖励
 """
@@ -39,13 +39,13 @@ class UAVSchedulingLimitedEnv(gym.Env):
                  point_info,
                  max_min=None,
                  seed=24,
-                 agent_max_battery: float = 100000000.0,  # 适中的电池容量
-                 agent_move_consumption: float = 1000.0,
+                 agent_max_battery: float = 5000000.0,  # 适中的电池容量
+                 agent_move_consumption: float = 50.0,
                  agent_tx_consumption: float = 100,
-                 agent_speed: float = 5,
+                 agent_speed: float = 2,
                  min_charging_rate: float = 0.70,
-                 sensor_max_battery: float = 240000.0,
-                 gateway_max_battery: float = 800000.0,
+                 sensor_max_battery: float = 10000.0,
+                 gateway_max_battery: float = 40000.0,
                  charge_time_levels: int = 100,
                  is_train: bool = False,
                  json_data: str = None,
@@ -80,18 +80,15 @@ class UAVSchedulingLimitedEnv(gym.Env):
         self.tx_energy = 0.0
         self.move_energy = 0.0
         self.charg_energy = 0.0
-        self.active_energy = 0.0
 
         # 存储图数据
         self.graph_G = graph_G
         self.point_info = point_info
         self.max_min = max_min
 
-        # 节点的特征
-        self.node_features = 10
-
         # 充电站充电速率（无人车自身充电）- 不再需要，改为固定时间充满
         self.station_charging_rate = 1
+        self.gamma = 0.99
 
         # 初始化节点映射
         self._initialize_node_mappings()
@@ -111,16 +108,17 @@ class UAVSchedulingLimitedEnv(gym.Env):
         # 定义观测和动作空间
         self._define_spaces()
 
-        # 基准线
-        self.base_total_distance = 2600.0
-        self.base_total_eue = 0.60     
         self.total_distance = 0.0
-        
+        self.total_overcharge =0.0
+        self.cum_cost   = 0.0
+
+        self._compute_norm_constants()
+        self._compute_charge_target()
+
         # 不可达惩罚系数
-        self.unreachable_penalty = -100.0
+        self.unreachable_penalty = -5.0
         
-        # 有限电池版本：最大步数较大，允许多次往返
-        self.max_steps = 8 * self.num_nodes
+        self.max_steps = 2 * self.num_nodes
 
     def _initialize_node_mappings(self):
         """初始化节点映射关系"""
@@ -180,9 +178,6 @@ class UAVSchedulingLimitedEnv(gym.Env):
         self.num_sensors = len(self.sensor_global_ids)
         self.num_relays = len(self.relay_global_ids)
         self.num_stations = len(self.station_global_ids)
-
-        if(self.num_relays==0):
-            self.node_features=9
 
     def _initialize_uav_state(self):
         """初始化无人车状态"""
@@ -269,9 +264,30 @@ class UAVSchedulingLimitedEnv(gym.Env):
         
         return dist_matrix
 
+    # def _initialize_distance_matrix(self):
+    #     """初始化距离矩阵"""
+    #     self.node_distance = self._compute_all_pairs_shortest_paths()
     def _initialize_distance_matrix(self):
         """初始化距离矩阵"""
         self.node_distance = self._compute_all_pairs_shortest_paths()
+        
+        # 取所有可达节点对的距离（去掉对角线 0 和 inf）
+        finite_d = self.node_distance[np.isfinite(self.node_distance)]
+        finite_d = finite_d[finite_d > 0]
+        
+        if len(finite_d) > 0:
+            # 方案 1：纯 min / max
+            self.dist_min = float(finite_d.min())
+            self.dist_max = float(finite_d.max())
+            
+            # # 方案 2：分位数，抗极端值
+            # self.dist_min = float(np.percentile(finite_d, 5))
+            # self.dist_max = float(np.percentile(finite_d, 95))
+        else:
+            self.dist_min = 0.0
+            self.dist_max = 1.0
+        
+        self.dist_range = max(self.dist_max - self.dist_min, 1e-6)
 
     def _initialize_charging_parameters(self):
         """初始化充电参数"""
@@ -290,13 +306,13 @@ class UAVSchedulingLimitedEnv(gym.Env):
             "observations": spaces.Box(
                 low=0.0,
                 high=1.0,
-                shape=(self.num_nodes, self.node_features), 
+                shape=(self.num_nodes, 10), 
                 dtype=np.float32
             ),
             "uav_state": spaces.Box(
                 low=0.0,
                 high=1.0,
-                shape=(5,), 
+                shape=(8,), 
                 dtype=np.float32
             ),
             "action_mask": spaces.Box(
@@ -322,7 +338,7 @@ class UAVSchedulingLimitedEnv(gym.Env):
         """获取结构化的观测值"""
         current_node_id = self.uav_state["node_id"]
         
-        node_features = np.zeros((self.num_nodes, self.node_features), dtype=np.float32)
+        node_features = np.zeros((self.num_nodes, 10), dtype=np.float32)
         full_mask = self.action_masks()
 
         min_dist = self.max_min["distance"]["min"] if self.max_min else 0
@@ -352,20 +368,14 @@ class UAVSchedulingLimitedEnv(gym.Env):
             if node_type == "sensor":
                 total = state.get("total_battery", self.sensor_max_battery)
                 energy_ratio = state["current_energy"] / total if total > 0 else 0
-                if(self.node_features==10):
-                    type_code = [1.0, 0.0, 0.0]
-                else:
-                    type_code = [1.0, 0.0]
+                type_code = [1.0, 0.0, 0.0]
             elif node_type == "relay":
                 total = state.get("total_battery", self.gateway_max_battery)
                 energy_ratio = state["current_energy"] / total if total > 0 else 0
                 type_code = [0.0, 1.0, 0.0]
             elif node_type == "station":
                 energy_ratio = 1.0
-                if(self.node_features==10):
-                    type_code = [0.0, 0.0, 1.0]
-                else:
-                    type_code = [0.0, 1.0]
+                type_code = [0.0, 0.0, 1.0]
             
             charging_rate = state.get("charging_rate", 0.0)
             
@@ -374,14 +384,9 @@ class UAVSchedulingLimitedEnv(gym.Env):
             node_features[i, 2] = norm_x
             node_features[i, 3] = norm_y
             node_features[i, 4] = is_charge
-            if(self.node_features==10):
-                node_features[i, 5:8] = type_code
-                node_features[i, 8] = 1.0 if state.get("is_mask", False) else 0.0
-                node_features[i, 9] = charging_rate
-            else:
-                node_features[i, 5:7] = type_code
-                node_features[i, 7] = 1.0 if state.get("is_mask", False) else 0.0
-                node_features[i, 8] = charging_rate
+            node_features[i, 5:8] = type_code
+            node_features[i, 8] = 1.0 if state.get("is_mask", False) else 0.0
+            node_features[i, 9] = charging_rate
 
         uav_x = self.global_to_original_map[current_node_id]["x"]
         uav_y = self.global_to_original_map[current_node_id]["y"]
@@ -391,6 +396,9 @@ class UAVSchedulingLimitedEnv(gym.Env):
         
         uav_state = np.array([
             self.uav_state["remaining_battery"] / self.agent_max_battery,
+            self.charg_energy / max(self.max_possible_charge, 1e-6),
+            self.cum_cost   / max(self.max_possible_cost, 1e-6),
+            self.total_distance / self.max_dist_norm,
             completion_ratio,
             return_ratio,
             (uav_x - x_min) / x_range,
@@ -405,7 +413,16 @@ class UAVSchedulingLimitedEnv(gym.Env):
             "action_mask": action_mask,
             "last_node_idx": np.array([current_node_id], dtype=np.int64)
         }
-
+    def _compute_norm_constants(self):
+        self.max_possible_charge = (
+            self.num_sensors * self.sensor_max_battery
+            + self.num_relays  * self.gateway_max_battery
+        )
+        self.max_possible_cost = (
+            self.num_nodes * self.dist_max * self.agent_move_consumption
+            + self.max_possible_charge
+        )
+        self.max_dist_norm = max(self.num_nodes * self.dist_max, 1e-6)
     def action_masks(self) -> np.ndarray:
         """
         有限电池版本的动作掩码
@@ -565,10 +582,13 @@ class UAVSchedulingLimitedEnv(gym.Env):
         self.return_to_station_count = 0
         
         # 重置所有能量统计
+        self.total_distance = 0.0
         self.tx_energy = 0.0
         self.move_energy = 0.0
         self.charg_energy = 0.0
-        self.active_energy = 0.0
+        self.total_overcharge = 0.0
+        self.cum_cost   = 0.0
+
         
         if self.is_train and self.json_data:
             wsn_sim = WSNSimulation(self.json_data, seed=int(time.time()))
@@ -581,6 +601,8 @@ class UAVSchedulingLimitedEnv(gym.Env):
             self._initialize_uav_state()
             self._initialize_node_states()
             self._initialize_distance_matrix()
+            self._compute_norm_constants()   
+            self._compute_charge_target()
         else:
             self.uav_state = self.initial_uav_state.copy()
             
@@ -617,13 +639,20 @@ class UAVSchedulingLimitedEnv(gym.Env):
                         "is_mask": False,
                         "total_battery": 0
                     }
-        
-        self.base_total_distance = 2600.0
-        self.base_total_eue = 0.60     
-        self.total_distance = 0.0
+           
         
         return self._get_struct_obs(), self._get_info()
-
+    def _compute_charge_target(self):
+        self.total_charge_needed = 0.0
+        self.tx_needed_total = 0.0
+        for gid in self.node_global_ids:
+            state = self.dynamic_node_states[gid]
+            delta = max(0.0, state["total_battery"] - state["current_energy"])
+            rate = max(state["charging_rate"], 1e-6)
+            self.total_charge_needed += delta
+            self.tx_needed_total += delta / rate
+        self.total_charge_needed = max(self.total_charge_needed, 1e-6)
+        self.tx_needed_total = max(self.tx_needed_total, 1e-6)
     def _get_info(self):
         """获取环境信息"""
         return {
@@ -634,9 +663,24 @@ class UAVSchedulingLimitedEnv(gym.Env):
             "total_nodes": len(self.node_global_ids),
             "return_to_station_count": self.return_to_station_count
         }
-
+    def _phi(self):
+        # dist_to_station = self.node_distance[self.uav_state["node_id"], self.station_node_id]
+        phi_charge_progress = min(self.charg_energy / self.total_charge_needed, 1.0)
+        # phi_dist = -(self.total_distance+dist_to_station) / self.max_dist_norm
+        phi_dist = -(self.total_distance) / self.max_dist_norm
+        phi_done = self.node_charge_count / max(1, len(self.node_global_ids))
+        phi_overcharge = -self.total_overcharge / self.tx_needed_total
+        # phi_battery = self.uav_state["remaining_battery"] / self.agent_max_battery
+        # battery_ratio = self.uav_state["remaining_battery"] / self.agent_max_battery
+        # phi_battery = -max(0.0, 0.3 - battery_ratio)   # 只在电量<30%时给负
+        # return (20.0*phi_charge_progress + 20.0*phi_dist + 2.0*phi_done + 5.0*phi_overcharge + 5.0*phi_battery)
+        return (20.0*phi_charge_progress + 20.0*phi_dist + 2.0*phi_done + 5.0*phi_overcharge)
+    
     def step(self, action):
         """执行一步环境 - 保持原始reward逻辑不变"""
+
+        phi_prev = self._phi() 
+
         action_dict = self._decode_action(action)
         target_node_id = action_dict["target_node_id"]
         action_charge_time = action_dict["charge_time"][0]
@@ -650,8 +694,6 @@ class UAVSchedulingLimitedEnv(gym.Env):
         step_move_time = 0.0
         step_charge_time = 0.0
         distance_needed = 0.0
-        active_time = 0.0
-        active_energy = 0.0
 
         current_node_id = self.uav_state["node_id"]
         
@@ -671,7 +713,7 @@ class UAVSchedulingLimitedEnv(gym.Env):
         step_move_time = distance_needed / self.agent_speed
 
         # 距离惩罚 - 保持原始逻辑
-        reward -= 3.0 * (distance_needed / self.max_min["distance"]["max"])
+        # reward -= 1.0 * (distance_needed / self.max_min["distance"]["max"])
         
         # 执行移动
         if step_move_energy > self.uav_state["remaining_battery"]:
@@ -685,8 +727,11 @@ class UAVSchedulingLimitedEnv(gym.Env):
         self.uav_state["remaining_battery"] -= step_move_energy
         self.uav_state["node_id"] = target_node_id
 
-        node_type = self.global_to_original_map[target_node_id]["original_type"]
+        self.move_energy += step_move_energy
         
+        node_type = self.global_to_original_map[target_node_id]["original_type"]
+        self.current_step += 1
+         
         # 如果在充电站
         if node_type == "station":
             # 记录返回充电站次数
@@ -718,15 +763,16 @@ class UAVSchedulingLimitedEnv(gym.Env):
             # 检查是否所有节点都已充电
             if self.node_charge_count >= len(self.node_global_ids):
                 terminated = True
-                # 计算最终奖励 - 使用原始reward计算逻辑
-                if self.uav_state["remaining_battery"] >= 0.0 and (self.tx_energy + self.move_energy + self.active_energy) > 0.0:
-                    total_eue = self.charg_energy / (self.tx_energy + self.move_energy + self.active_energy)
-                    reward += 1.0 * (total_eue / self.base_total_eue) + 2.0 * (self.base_total_distance / max(self.total_distance, 1))
-                else:
-                    reward -= 5.0
-            else:
-                # 如果还没充完所有节点，给一个小惩罚鼓励尽快完成
-                reward -= 0.5
+                # # 计算最终奖励 - 使用原始reward计算逻辑
+                # if self.uav_state["remaining_battery"] >= 0.0 and (self.tx_energy + self.move_energy) > 0.0:
+                #     total_eue = self.charg_energy / (self.tx_energy + self.move_energy)
+                #     reward += 1.0*self.num_nodes * total_eue
+                #     reward += 1.0*((self.max_min["distance"]["max"]*self.current_step) / max(self.total_distance, 1))
+                # else:
+                #     reward -= 5.0
+            # else:
+            #     # 如果还没充完所有节点，给一个小惩罚鼓励尽快完成
+            #     reward -= 0.5
                     
         elif node_type == "sensor" or node_type == "relay":
             node_state = self.dynamic_node_states[target_node_id]   
@@ -735,11 +781,6 @@ class UAVSchedulingLimitedEnv(gym.Env):
             
             # 节点能量消耗
             coum_move_energy = step_move_time / (394 if node_type == "sensor" else 197)
-
-            # 检查节点是否已死亡
-            if node_state["current_energy"] - coum_move_energy <= 0.0:
-                active_time = 1 / node_state["charging_rate"]
-                active_energy = active_time * self.agent_tx_consumption
                       
             energy_needed = max_battery - node_state["current_energy"] + coum_move_energy        
                     
@@ -749,6 +790,9 @@ class UAVSchedulingLimitedEnv(gym.Env):
 
             step_charge_energy = step_charge_time * net_tx_rate    
             step_tx_energy = action_charge_time * self.agent_tx_consumption   
+
+            step_overcharge = self.agent_tx_consumption * max(0.0, action_charge_time - step_charge_time)
+            self.total_overcharge += step_overcharge
 
             # 执行充电
             if not node_state["is_charge"]:
@@ -769,21 +813,19 @@ class UAVSchedulingLimitedEnv(gym.Env):
             node_state["current_energy"] = min(node_state["current_energy"] + step_charge_energy - coum_move_energy, max_battery)
 
             # 补偿时间消耗
-            current_time_step = step_move_time + action_charge_time + active_time
+            current_time_step = step_move_time + action_charge_time
             coum_move_energy = current_time_step / (394 if node_type == "sensor" else 197)
             node_state["current_energy"] += coum_move_energy
         
             # 累积能量统计
             self.tx_energy += step_tx_energy
-            self.move_energy += step_move_energy
             self.charg_energy += step_charge_energy
-            self.active_energy += active_energy
                                             
             # 中间步骤的EUE奖励 - 保持原始逻辑
-            total_energy_consumed = step_move_energy + step_tx_energy + active_energy
-            if total_energy_consumed > 0 and step_charge_energy > 0:
-                eue_reward = step_charge_energy / (total_energy_consumed)
-                reward += 1.0 * eue_reward
+            # total_energy_consumed = step_move_energy + step_tx_energy
+            # if total_energy_consumed > 0 and step_charge_energy > 0:
+                # eue_reward = step_charge_energy / (total_energy_consumed)
+                # reward += 1.0 * eue_reward
 
             # 更新全局时间和其他节点能量
             self.current_time += current_time_step
@@ -795,8 +837,12 @@ class UAVSchedulingLimitedEnv(gym.Env):
                 node_type_temp = self.global_to_original_map[global_id]["original_type"]
                 coum_move_energy_temp = current_time_step / (394 if node_type_temp == "sensor" else 197)
                 node_state_temp["current_energy"] = max(0.0, node_state_temp["current_energy"] - coum_move_energy_temp)
-        
-        self.current_step += 1
+
+        self.cum_cost = self.tx_energy + self.move_energy
+
+        phi_next = self._phi()     
+        reward += self.gamma * phi_next - phi_prev 
+
         if self.current_step >= self.max_steps and not terminated:
             truncated = True
             reward -= 5.0
@@ -807,7 +853,6 @@ class UAVSchedulingLimitedEnv(gym.Env):
             "step_charge_energy": step_charge_energy,
             "step_move_energy": step_move_energy,
             "step_tx_energy": step_tx_energy,
-            "active_energy": active_energy,
             "node_charge_count": self.node_charge_count,
             "distance_needed": distance_needed,
         })
