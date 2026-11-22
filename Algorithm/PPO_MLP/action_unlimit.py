@@ -29,10 +29,10 @@ except ImportError:
 
 # 模型文件路径映射
 MODEL_PATHS = {
-    'RN335': './models/RN335_model.zip',
-    'RN508': './models/RN508_model.zip',
-    'RN327': './models/RN327_model.zip',
-    'RN422': './models/RN422_model.zip',
+    'RN373': './models/RN373_model.zip',
+    'RN446': './models/RN446_model.zip',
+    'RN528': './models/RN528_model.zip',
+    'RN629': './models/RN629_model.zip',
     'default': './models/unlimited_best_model.zip'
 }
 
@@ -449,7 +449,7 @@ class RAWCSSimulator:
                 break
         
         final_info = self.env._get_info()
-        total_consumed = self.env.tx_energy + self.env.move_energy + self.env.active_energy
+        total_consumed = self.env.tx_energy + self.env.move_energy
         eue = self.env.charg_energy / total_consumed if total_consumed > 0 else 0
         
         return {
@@ -463,5 +463,4 @@ class RAWCSSimulator:
             'charge_energy': self.env.charg_energy,
             'move_energy': self.env.move_energy,
             'tx_energy': self.env.tx_energy,
-            'active_energy': self.env.active_energy
         }
