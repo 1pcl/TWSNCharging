@@ -10,11 +10,11 @@ from matplotlib.lines import Line2D
 
 class WSNSimulation:
     def __init__(self, data_input: Union[str, Dict[str, Any]], 
-                 sensor_battery: float = 240000.0, 
-                 relay_battery: float = 800000.0,
+                 sensor_battery: float = 10000.0, 
+                 relay_battery: float = 40000.0,
                  station_battery: float = 1000000.0,
                  num_sensors: int = 40,
-                 num_relays: int = 5,
+                 num_relays: int =5,
                  seed: int = 42):
         """
         初始化 WSN 仿真器（基于道路图结构）
